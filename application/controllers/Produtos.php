@@ -27,6 +27,8 @@ class Produtos extends CI_Controller {
         $this->form_validation->set_rules('nome', 'Nome', 'required');
         $this->form_validation->set_rules('preco', 'Preço', 'required|numeric');
         $this->form_validation->set_rules('quantidade', 'Quantidade', 'required|numeric');
+        // Nova validação: pelo menos uma variação base é obrigatória
+        $this->form_validation->set_rules('variacoes_nomes[0]', 'Variação Base', 'required');
         
         if ($this->form_validation->run() === FALSE) {
             // Formulário com erro ou primeira vez que abre
@@ -40,32 +42,30 @@ class Produtos extends CI_Controller {
                 'preco' => $this->input->post('preco')
             ]);
             
-            // Depois registra o estoque inicial
+            // Depois registra o estoque inicial do produto
             $this->estoque_model->update_quantidade_produto(
                 $produto_id, 
                 $this->input->post('quantidade')
             );
             
-            // Se tiver variações, vamos cadastrar cada uma
-            if ($this->input->post('variacoes_nomes')) {
-                $variacoes_nomes = $this->input->post('variacoes_nomes');
-                $variacoes_qtds = $this->input->post('variacoes_qtds');
-                
-                foreach ($variacoes_nomes as $key => $nome) {
-                    if (!empty($nome)) {
-                        // Cadastra a variação (cor, tamanho, etc)
-                        $variacao_id = $this->produto_model->add_variacao([
-                            'produto_id' => $produto_id,
-                            'nome' => $nome
-                        ]);
-                        
-                        // E registra o estoque dessa variação
-                        if (isset($variacoes_qtds[$key])) {
-                            $this->estoque_model->update_quantidade_variacao(
-                                $variacao_id,
-                                $variacoes_qtds[$key]
-                            );
-                        }
+            // Agora cadastramos as variações - É obrigatório ter pelo menos uma!
+            $variacoes_nomes = $this->input->post('variacoes_nomes');
+            $variacoes_qtds = $this->input->post('variacoes_qtds');
+            
+            foreach ($variacoes_nomes as $key => $nome) {
+                if (!empty($nome)) {
+                    // Cadastra a variação (cor, tamanho, etc)
+                    $variacao_id = $this->produto_model->add_variacao([
+                        'produto_id' => $produto_id,
+                        'nome' => $nome
+                    ]);
+                    
+                    // E registra o estoque dessa variação
+                    if (isset($variacoes_qtds[$key])) {
+                        $this->estoque_model->update_quantidade_variacao(
+                            $variacao_id,
+                            $variacoes_qtds[$key]
+                        );
                     }
                 }
             }
@@ -94,6 +94,23 @@ class Produtos extends CI_Controller {
         $this->form_validation->set_rules('nome', 'Nome', 'required');
         $this->form_validation->set_rules('preco', 'Preço', 'required|numeric');
         $this->form_validation->set_rules('quantidade', 'Quantidade', 'required|numeric');
+        
+        // Verificando se já existem variações ou se há novas
+        $tem_variacoes = false;
+        
+        if (!empty($data['variacoes'])) {
+            $tem_variacoes = true;
+        } else if ($this->input->post('novas_variacoes_nomes')) {
+            $novas_variacoes = $this->input->post('novas_variacoes_nomes');
+            if (!empty($novas_variacoes[0])) {
+                $tem_variacoes = true;
+            }
+        }
+        
+        // Se não há variações existentes, a primeira nova variação é obrigatória
+        if (!$tem_variacoes) {
+            $this->form_validation->set_rules('novas_variacoes_nomes[0]', 'Variação Base', 'required');
+        }
         
         if ($this->form_validation->run() === FALSE) {
             // Exibe o formulário de edição

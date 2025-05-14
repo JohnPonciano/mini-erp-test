@@ -42,9 +42,15 @@
                         </div>
                     </div>
                     
-                    <div class="mb-3">
-                        <label for="endereco" class="form-label">Endereço</label>
-                        <input type="text" class="form-control" id="endereco" name="endereco" value="<?= set_value('endereco') ?>" required>
+                    <div class="row mb-3">
+                        <div class="col-md-9">
+                            <label for="endereco" class="form-label">Endereço</label>
+                            <input type="text" class="form-control" id="endereco" name="endereco" value="<?= set_value('endereco') ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="numero" class="form-label">Número</label>
+                            <input type="text" class="form-control" id="numero" name="numero" value="<?= set_value('numero') ?>" required>
+                        </div>
                     </div>
                     
                     <div class="row mb-3">
@@ -120,4 +126,51 @@
             </div>
         </div>
     </div>
-</div> 
+</div>
+
+<script>
+$(document).ready(function() {
+    // Função para buscar endereço pelo CEP
+    $('#cep').blur(function() {
+        var cep = $(this).val().replace(/\D/g, '');
+        
+        if (cep.length !== 8) {
+            return;
+        }
+        
+        // Exibir indicador de carregamento
+        $('#endereco').val('Buscando...');
+        $('#cidade').val('Buscando...');
+        $('#estado').val('Buscando...');
+        
+        $.ajax({
+            url: '<?= base_url('carrinho/buscar_cep') ?>',
+            type: 'POST',
+            data: {cep: cep},
+            dataType: 'json',
+            success: function(response) {
+                if (response.error) {
+                    alert(response.error);
+                    $('#endereco').val('');
+                    $('#cidade').val('');
+                    $('#estado').val('');
+                } else {
+                    // Preencher os campos com os dados retornados
+                    $('#endereco').val(response.endereco);
+                    $('#cidade').val(response.cidade);
+                    $('#estado').val(response.estado);
+                    
+                    // Focar no campo de número após preencher o endereço
+                    $('#numero').focus();
+                }
+            },
+            error: function() {
+                alert('Erro ao consultar o CEP. Tente novamente.');
+                $('#endereco').val('');
+                $('#cidade').val('');
+                $('#estado').val('');
+            }
+        });
+    });
+});
+</script> 

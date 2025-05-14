@@ -68,17 +68,50 @@ class Carrinho extends CI_Controller {
                 redirect('produtos/view/' . $produto_id);
             }
             
-            $item = array(
-                'id'      => $produto_id . '_' . $variacao_id,
-                'qty'     => $quantidade,
-                'price'   => $produto->preco,
-                'name'    => $produto->nome . ' - ' . $variacao->nome,
-                'options' => array(
-                    'produto_id' => $produto_id,
-                    'variacao_id' => $variacao_id,
-                    'variacao_nome' => $variacao->nome
-                )
-            );
+            // Verificando se o item já existe no carrinho
+            $cart_contents = $this->cart->contents();
+            $item_id = $produto_id . '_' . $variacao_id;
+            $update = false;
+            $rowid = '';
+            
+            foreach ($cart_contents as $item) {
+                if ($item['id'] == $item_id) {
+                    // Item já existe, vamos atualizar a quantidade em vez de duplicar
+                    $update = true;
+                    $rowid = $item['rowid'];
+                    $nova_quantidade = $item['qty'] + $quantidade;
+                    
+                    // Verificando se tem estoque suficiente para a quantidade atualizada
+                    if ($estoque->quantidade < $nova_quantidade) {
+                        $this->session->set_flashdata('error', 'Estoque insuficiente para ' . $item['name']);
+                        redirect('produtos/view/' . $produto_id);
+                    }
+                    
+                    break;
+                }
+            }
+            
+            if ($update) {
+                // Atualiza item existente
+                $this->cart->update(array(
+                    'rowid' => $rowid,
+                    'qty' => $nova_quantidade
+                ));
+            } else {
+                // Adiciona novo item
+                $item = array(
+                    'id'      => $item_id,
+                    'qty'     => $quantidade,
+                    'price'   => $produto->preco,
+                    'name'    => $produto->nome . ' - ' . $variacao->nome,
+                    'options' => array(
+                        'produto_id' => $produto_id,
+                        'variacao_id' => $variacao_id,
+                        'variacao_nome' => $variacao->nome
+                    )
+                );
+                $this->cart->insert($item);
+            }
         } else {
             $estoque = $this->estoque_model->get_by_produto($produto_id);
             
@@ -88,20 +121,51 @@ class Carrinho extends CI_Controller {
                 redirect('produtos/view/' . $produto_id);
             }
             
-            $item = array(
-                'id'      => $produto_id,
-                'qty'     => $quantidade,
-                'price'   => $produto->preco,
-                'name'    => $produto->nome,
-                'options' => array(
-                    'produto_id' => $produto_id,
-                    'variacao_id' => null
-                )
-            );
+            // Verificando se o item já existe no carrinho
+            $cart_contents = $this->cart->contents();
+            $update = false;
+            $rowid = '';
+            
+            foreach ($cart_contents as $item) {
+                if ($item['id'] == $produto_id) {
+                    // Item já existe, vamos atualizar a quantidade em vez de duplicar
+                    $update = true;
+                    $rowid = $item['rowid'];
+                    $nova_quantidade = $item['qty'] + $quantidade;
+                    
+                    // Verificando se tem estoque suficiente para a quantidade atualizada
+                    if ($estoque->quantidade < $nova_quantidade) {
+                        $this->session->set_flashdata('error', 'Estoque insuficiente para ' . $item['name']);
+                        redirect('produtos/view/' . $produto_id);
+                    }
+                    
+                    break;
+                }
+            }
+            
+            if ($update) {
+                // Atualiza item existente
+                $this->cart->update(array(
+                    'rowid' => $rowid,
+                    'qty' => $nova_quantidade
+                ));
+            } else {
+                // Adiciona novo item
+                $item = array(
+                    'id'      => $produto_id,
+                    'qty'     => $quantidade,
+                    'price'   => $produto->preco,
+                    'name'    => $produto->nome,
+                    'options' => array(
+                        'produto_id' => $produto_id,
+                        'variacao_id' => null
+                    )
+                );
+                $this->cart->insert($item);
+            }
         }
         
         // Bota no carrinho e vamos às compras!
-        $this->cart->insert($item);
         $this->session->set_flashdata('success', 'Produto adicionado ao carrinho');
         redirect('carrinho');
     }
@@ -221,6 +285,7 @@ class Carrinho extends CI_Controller {
         $this->form_validation->set_rules('cliente_telefone', 'Telefone', 'required');
         $this->form_validation->set_rules('cep', 'CEP', 'required');
         $this->form_validation->set_rules('endereco', 'Endereço', 'required');
+        $this->form_validation->set_rules('numero', 'Número', 'required');
         $this->form_validation->set_rules('cidade', 'Cidade', 'required');
         $this->form_validation->set_rules('estado', 'Estado', 'required');
         
@@ -230,12 +295,14 @@ class Carrinho extends CI_Controller {
             $this->load->view('templates/footer');
         } else {
             // Tudo certo com os dados, vamos criar o pedido!
+            $endereco_completo = $this->input->post('endereco') . ', ' . $this->input->post('numero');
+            
             $order_data = array(
                 'cliente_nome' => $this->input->post('cliente_nome'),
                 'cliente_email' => $this->input->post('cliente_email'),
                 'cliente_telefone' => $this->input->post('cliente_telefone'),
                 'cep' => $this->input->post('cep'),
-                'endereco' => $this->input->post('endereco'),
+                'endereco' => $endereco_completo,
                 'cidade' => $this->input->post('cidade'),
                 'estado' => $this->input->post('estado'),
                 'subtotal' => $this->cart->total(),
@@ -286,8 +353,24 @@ class Carrinho extends CI_Controller {
     }
     
     private function calcular_frete() {
-        // Por enquanto é fixo, mas um dia vamos integrar com Correios!
-        return 15.00;
+        // Nova lógica de frete baseada no subtotal
+        $subtotal = $this->cart->total();
+
+        // Frete grátis para compras acima de R$200
+        if ($subtotal > 200) {
+            // Acima de 200 reais? Frete grátis pra você!
+            return 0;
+        } 
+        // Frete de R$15 para compras entre R$52 e R$166,59
+        else if ($subtotal >= 52 && $subtotal <= 166.59) {
+            // Entre 52 e 166,59? Frete mediano!
+            return 15.00;
+        } 
+        // Frete de R$20 para os demais valores
+        else {
+            // Menos de 52 ou entre 166,60 e 200? Frete cheio!
+            return 20.00;
+        }
     }
     
     private function verificar_estoque($produto_id, $variacao_id, $quantidade) {

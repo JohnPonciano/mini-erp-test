@@ -82,66 +82,63 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
     FOREIGN KEY (variacao_id) REFERENCES variacoes(id) ON DELETE SET NULL
 );
 
--- Insert geek-themed products
+-- Insert geek-themed products with strategic prices
 INSERT INTO produtos (nome, preco) VALUES 
-('Camiseta Star Wars', 49.90),
-('Action Figure Avengers', 129.90),
-('Caneca Harry Potter', 39.90),
-('Funko Pop Game of Thrones', 89.90),
-('HQ Batman: O Cavaleiro das Trevas', 59.90),
-('Jogo de Tabuleiro Dungeons & Dragons', 299.90),
-('Miniatura Senhor dos Anéis', 149.90),
-('Poster Vingadores: Ultimato', 29.90),
-('Chaveiro Marvel', 19.90),
-('Almofada Star Trek', 45.90);
+('Camiseta Star Wars - Edição Especial', 89.90),    -- Frete R$15
+('Action Figure Mandalorian', 159.90),              -- Frete R$15
+('Caneca Térmica Harry Potter', 49.90),             -- Frete R$20
+('Funko Pop Demon Slayer', 129.90),                 -- Frete R$15
+('Box Mangá Attack on Titan', 219.90),              -- Frete Grátis
+('Jogo de Tabuleiro RPG Deluxe', 299.90),          -- Frete Grátis
+('Miniatura Goku Dragon Ball', 149.90),             -- Frete R$15
+('Poster Metal Vingadores', 45.90),                 -- Frete R$20
+('Kit Chaveiros Pokémon', 59.90),                   -- Frete R$15
+('Luminária 3D Death Star', 179.90);                -- Frete R$15
 
 -- Insert product variations
 INSERT INTO variacoes (produto_id, nome) VALUES
-(1, 'Tamanho P'),
-(1, 'Tamanho M'),
-(1, 'Tamanho G'),
-(1, 'Tamanho GG'),
-(2, 'Iron Man'),
-(2, 'Captain America'),
-(2, 'Thor'),
-(3, 'Grifinória'),
-(3, 'Sonserina'),
-(3, 'Corvinal'),
-(3, 'Lufa-Lufa'),
-(4, 'Jon Snow'),
-(4, 'Daenerys Targaryen'),
-(4, 'Tyrion Lannister'),
-(7, 'Gandalf'),
-(7, 'Frodo'),
-(7, 'Gollum');
+(1, 'P Preto'),
+(1, 'M Preto'),
+(1, 'G Preto'),
+(1, 'P Branco'),
+(1, 'M Branco'),
+(1, 'G Branco'),
+(2, 'Beskar Armor'),
+(2, 'Combat Mode'),
+(3, 'Grifinória 500ml'),
+(3, 'Sonserina 500ml'),
+(3, 'Corvinal 500ml'),
+(3, 'Lufa-Lufa 500ml'),
+(4, 'Tanjiro'),
+(4, 'Nezuko'),
+(4, 'Zenitsu'),
+(7, 'Super Sayajin'),
+(7, 'Base Form'),
+(7, 'Ultra Instinct');
 
 -- Insert inventory data
 INSERT INTO estoque (produto_id, variacao_id, quantidade) VALUES
-(1, 1, 25), -- Camiseta Star Wars P
-(1, 2, 30), -- Camiseta Star Wars M
-(1, 3, 20), -- Camiseta Star Wars G
-(1, 4, 15), -- Camiseta Star Wars GG
-(2, 5, 10), -- Action Figure Iron Man
-(2, 6, 8),  -- Action Figure Captain America
-(2, 7, 12), -- Action Figure Thor
-(3, 8, 18), -- Caneca Harry Potter Grifinória
-(3, 9, 15), -- Caneca Harry Potter Sonserina
-(3, 10, 12), -- Caneca Harry Potter Corvinal
-(3, 11, 10), -- Caneca Harry Potter Lufa-Lufa
-(4, 12, 6),  -- Funko Pop Jon Snow
-(4, 13, 4),  -- Funko Pop Daenerys
-(4, 14, 8),  -- Funko Pop Tyrion
-(5, NULL, 20), -- HQ Batman (sem variação)
-(6, NULL, 5),  -- Jogo D&D (sem variação)
-(7, 15, 7),  -- Miniatura Gandalf
-(7, 16, 9),  -- Miniatura Frodo
-(7, 17, 5),  -- Miniatura Gollum
-(8, NULL, 30), -- Poster (sem variação)
-(9, NULL, 50), -- Chaveiro (sem variação)
-(10, NULL, 15); -- Almofada (sem variação)
+(1, 1, 20),  -- Camiseta P Preto
+(1, 2, 25),  -- Camiseta M Preto
+(1, 3, 15),  -- Camiseta G Preto
+(1, 4, 20),  -- Camiseta P Branco
+(1, 5, 25),  -- Camiseta M Branco
+(1, 6, 15),  -- Camiseta G Branco
+(2, 7, 10),  -- Mandalorian Beskar
+(2, 8, 8),   -- Mandalorian Combat
+(3, 9, 15),  -- Caneca Grifinória
+(3, 10, 15), -- Caneca Sonserina
+(3, 11, 15), -- Caneca Corvinal
+(3, 12, 15), -- Caneca Lufa-Lufa
+(4, 13, 12), -- Funko Tanjiro
+(4, 14, 10), -- Funko Nezuko
+(4, 15, 8),  -- Funko Zenitsu
+(7, 16, 10), -- Goku SSJ
+(7, 17, 10), -- Goku Base
+(7, 18, 5);  -- Goku UI
 
 -- Insert coupon examples
 INSERT INTO cupons (codigo, desconto, tipo, valor_minimo, data_validade, status) VALUES
-('GEEK10', 10.00, 'percentual', 50.00, '2023-12-31', TRUE),
-('WELCOME20', 20.00, 'percentual', 100.00, '2023-12-31', TRUE),
-('FRETE', 15.00, 'valor', 80.00, '2023-12-31', TRUE); 
+('GEEK10', 10.00, 'percentual', 50.00, '2025-12-31', TRUE),
+('WELCOME20', 20.00, 'percentual', 100.00, '2025-12-31', TRUE),
+('FRETE', 15.00, 'valor', 80.00, '2025-12-31', TRUE); 
