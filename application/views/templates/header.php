@@ -3,17 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= $title ?? 'Mini ERP' ?></title>
+    <title><?= isset($title) ? $title . ' - ' : '' ?>Mini ERP</title>
     
-    <!-- Bootstrap CSS -->
+    <!-- jQuery (deve ser carregado primeiro) -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Bootstrap CSS e JS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
     <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script>
+        // Inicializa os tooltips do Bootstrap quando o documento estiver pronto
+        $(document).ready(function() {
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+        });
+    </script>
     
     <style>
         body {
-            padding-top: 60px;
-            padding-bottom: 40px;
+            padding-top: 20px;
+            padding-bottom: 60px;
         }
         .bg-primary {
             background-color: #4e73df !important;
@@ -47,10 +62,12 @@
             margin-top: 20px;
         }
         .footer {
-            padding: 25px 0;
-            margin-top: 20px;
-            background-color: #f8f9fc;
-            border-top: 1px solid #e3e6f0;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 60px;
+            line-height: 60px;
+            background-color: #f5f5f5;
         }
     </style>
 </head>
@@ -91,18 +108,33 @@
     </nav>
 
     <div class="container">
+        <!-- Flash Messages -->
         <?php if ($this->session->flashdata('success')): ?>
-            <div class="alert alert-success alert-dismissible fade show">
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <?= $this->session->flashdata('success') ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
         
         <?php if ($this->session->flashdata('error')): ?>
-            <div class="alert alert-danger alert-dismissible fade show">
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <?= $this->session->flashdata('error') ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <?php endif; ?>
+        
+        <?php if ($this->session->flashdata('errors')): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <ul class="mb-0">
+                    <?php foreach ($this->session->flashdata('errors') as $error): ?>
+                        <li><?= $error ?></li>
+                    <?php endforeach; ?>
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         <?php endif; ?>
         
         <h1 class="mt-4 mb-4"><?= $title ?? 'Mini ERP' ?></h1> 
+    </div>
+</body>
+</html> 

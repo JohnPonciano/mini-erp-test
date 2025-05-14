@@ -377,6 +377,7 @@ class Carrinho extends CI_Controller {
         $this->form_validation->set_rules('cep', 'CEP', 'required');
         $this->form_validation->set_rules('endereco', 'Endereço', 'required');
         $this->form_validation->set_rules('numero', 'Número', 'required');
+        $this->form_validation->set_rules('bairro', 'Bairro', 'required');
         $this->form_validation->set_rules('cidade', 'Cidade', 'required');
         $this->form_validation->set_rules('estado', 'Estado', 'required');
         
@@ -386,7 +387,16 @@ class Carrinho extends CI_Controller {
             $this->load->view('templates/footer');
         } else {
             // Tudo certo com os dados, vamos criar o pedido!
-            $endereco_completo = $this->input->post('endereco') . ', ' . $this->input->post('numero');
+            $endereco_completo = $this->input->post('endereco') . ', ' . 
+                               $this->input->post('numero');
+
+            // Adiciona o complemento se existir
+            if ($this->input->post('complemento')) {
+                $endereco_completo .= ' - ' . $this->input->post('complemento');
+            }
+
+            // Adiciona o bairro
+            $endereco_completo .= ' - ' . $this->input->post('bairro');
             
             $order_data = array(
                 'cliente_nome' => $this->input->post('cliente_nome'),
@@ -484,40 +494,61 @@ class Carrinho extends CI_Controller {
         
         // Se depois de limpar não tem 8 dígitos, dá erro
         if (strlen($cep) != 8) {
-            echo json_encode(['error' => 'CEP inválido']);
+            echo json_encode(['error' => 'CEP inválido. Digite 8 números.']);
             return;
         }
         
-        // Consulta na API dos Correios (ou ViaCEP)
+        // Consulta na API ViaCEP
         $url = "https://viacep.com.br/ws/{$cep}/json/";
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         $response = curl_exec($ch);
+        $httpcode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
         curl_close($ch);
         
-        // Deu erro na consulta?
+        // Verifica erros de conexão
         if (!$response) {
-            echo json_encode(['error' => 'Não foi possível consultar o CEP']);
+            echo json_encode(['error' => 'Erro ao conectar com o serviço de CEP: ' . $curl_error]);
+            return;
+        }
+
+        // Verifica o código de resposta HTTP
+        if ($httpcode != 200) {
+            echo json_encode(['error' => 'Serviço de CEP indisponível. Tente novamente mais tarde.']);
             return;
         }
         
         $endereco = json_decode($response);
         
-        // Endereço não encontrado ou deu erro?
-        if (isset($endereco->erro)) {
+        // Verifica se o JSON é válido
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            echo json_encode(['error' => 'Resposta inválida do serviço de CEP']);
+            return;
+        }
+        
+        // Verifica se o CEP foi encontrado
+        if (isset($endereco->erro) && $endereco->erro === true) {
             echo json_encode(['error' => 'CEP não encontrado']);
             return;
         }
         
-        // Tudo certo, retorna o endereço formatado
-        echo json_encode([
+        // Formata o endereço para retornar
+        $endereco_formatado = [
             'endereco' => $endereco->logradouro,
             'bairro' => $endereco->bairro,
             'cidade' => $endereco->localidade,
-            'estado' => $endereco->uf
-        ]);
+            'estado' => $endereco->uf,
+            'complemento' => $endereco->complemento,
+            'ibge' => $endereco->ibge,
+            'success' => true
+        ];
+        
+        echo json_encode($endereco_formatado);
     }
 
     private function output_response($response) {

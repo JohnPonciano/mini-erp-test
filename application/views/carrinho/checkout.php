@@ -55,6 +55,18 @@
                     
                     <div class="row mb-3">
                         <div class="col-md-6">
+                            <label for="bairro" class="form-label">Bairro</label>
+                            <input type="text" class="form-control" id="bairro" name="bairro" value="<?= set_value('bairro') ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="complemento" class="form-label">Complemento</label>
+                            <input type="text" class="form-control" id="complemento" name="complemento" value="<?= set_value('complemento') ?>">
+                            <div class="form-text">Opcional (apartamento, sala, etc.)</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
                             <label for="cidade" class="form-label">Cidade</label>
                             <input type="text" class="form-control" id="cidade" name="cidade" value="<?= set_value('cidade') ?>" required>
                         </div>
@@ -130,47 +142,129 @@
 
 <script>
 $(document).ready(function() {
-    // Função para buscar endereço pelo CEP
-    $('#cep').blur(function() {
+    // Função para mostrar feedback visual de loading
+    function showLoading() {
+        $('#cep').addClass('is-loading');
+        $('#endereco, #bairro, #complemento, #cidade, #estado').prop('disabled', true);
+        $('#endereco').val('Buscando...');
+        $('#bairro').val('Buscando...');
+        $('#cidade').val('Buscando...');
+        $('#estado').val('Buscando...');
+    }
+
+    // Função para esconder feedback visual de loading
+    function hideLoading() {
+        $('#cep').removeClass('is-loading');
+        $('#endereco, #bairro, #complemento, #cidade, #estado').prop('disabled', false);
+    }
+
+    // Função para limpar campos de endereço
+    function clearAddressFields() {
+        $('#endereco, #bairro, #complemento, #cidade, #estado').val('').prop('disabled', false);
+    }
+
+    // Máscara para o CEP (99999-999)
+    $('#cep').on('input', function() {
         var cep = $(this).val().replace(/\D/g, '');
+        if (cep.length > 8) cep = cep.substr(0, 8);
+        $(this).val(cep.replace(/(\d{5})(\d{3})/, '$1-$2'));
         
+        // Limpa os campos se o CEP for apagado
+        if (cep.length < 8) {
+            clearAddressFields();
+        }
+    });
+
+    // Função para buscar endereço pelo CEP diretamente no ViaCEP
+    function buscarCep() {
+        // Remove tudo que não for número
+        var cep = $('#cep').val().replace(/\D/g, '');
+        
+        // Verifica se o CEP tem 8 dígitos
         if (cep.length !== 8) {
+            if (cep.length > 0) {
+                alert('CEP inválido. Digite 8 números.');
+            }
+            clearAddressFields();
             return;
         }
         
-        // Exibir indicador de carregamento
-        $('#endereco').val('Buscando...');
-        $('#cidade').val('Buscando...');
-        $('#estado').val('Buscando...');
+        // Mostra que está carregando
+        showLoading();
         
-        $.ajax({
-            url: '<?= base_url('carrinho/buscar_cep') ?>',
-            type: 'POST',
-            data: {cep: cep},
-            dataType: 'json',
-            success: function(response) {
-                if (response.error) {
-                    alert(response.error);
-                    $('#endereco').val('');
-                    $('#cidade').val('');
-                    $('#estado').val('');
+        // Monta a URL do ViaCEP
+        var url = `https://viacep.com.br/ws/${cep}/json/`;
+        console.log('Consultando ViaCEP:', url);
+        
+        // Faz a consulta no ViaCEP
+        $.getJSON(url)
+            .done(function(data) {
+                console.log('Resposta do ViaCEP:', data);
+                hideLoading();
+                
+                // Verifica se o ViaCEP retornou erro
+                if (data.erro) {
+                    console.log('ViaCEP retornou erro');
+                    alert('CEP não encontrado');
+                    clearAddressFields();
+                    $('#cep').focus();
+                    return;
+                }
+                
+                // Preenche os campos com os dados do ViaCEP
+                $('#endereco').val(data.logradouro || '');
+                $('#bairro').val(data.bairro || '');
+                $('#cidade').val(data.localidade || '');
+                $('#estado').val(data.uf || '');
+                $('#complemento').val(data.complemento || '');
+                
+                // Se algum campo obrigatório veio vazio
+                if (!data.logradouro || !data.bairro || !data.localidade || !data.uf) {
+                    console.log('Alguns campos vieram vazios do ViaCEP');
+                    alert('CEP encontrado, mas alguns campos precisam ser preenchidos manualmente.');
+                }
+                
+                // Foca no próximo campo a ser preenchido
+                if (!data.logradouro) {
+                    $('#endereco').focus();
                 } else {
-                    // Preencher os campos com os dados retornados
-                    $('#endereco').val(response.endereco);
-                    $('#cidade').val(response.cidade);
-                    $('#estado').val(response.estado);
-                    
-                    // Focar no campo de número após preencher o endereço
                     $('#numero').focus();
                 }
-            },
-            error: function() {
+            })
+            .fail(function(jqxhr, textStatus, error) {
+                console.error('Erro ao consultar ViaCEP:', textStatus, error);
+                hideLoading();
                 alert('Erro ao consultar o CEP. Tente novamente.');
-                $('#endereco').val('');
-                $('#cidade').val('');
-                $('#estado').val('');
-            }
-        });
+                clearAddressFields();
+                $('#cep').focus();
+            });
+    }
+
+    // Dispara a busca quando o campo perde o foco
+    $('#cep').blur(buscarCep);
+    
+    // Dispara a busca quando pressionar Enter no campo
+    $('#cep').keypress(function(e) {
+        if (e.which === 13) {
+            e.preventDefault();
+            buscarCep();
+        }
     });
 });
-</script> 
+</script>
+
+<style>
+/* Estilo para feedback visual de loading */
+.is-loading {
+    background-image: url('data:image/svg+xml;charset=utf8,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"%3E%3Cpath d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" fill="%23ccc"/%3E%3Cpath d="M20 12h2A10 10 0 0 0 12 2v2a8 8 0 0 1 8 8z" fill="%23333"%3E%3CanimateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/%3E%3C/path%3E%3C/svg%3E');
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 20px;
+}
+
+/* Estilo para campos desabilitados durante a busca */
+input:disabled {
+    background-color: #f8f9fa;
+    cursor: wait;
+}
+</style> 
