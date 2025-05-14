@@ -2,6 +2,8 @@
 
 Um sistema simples para controle de Pedidos, Produtos, Cupons e Estoque feito com CodeIgniter 3.
 
+> **Recomendação**: Para facilitar a instalação e evitar problemas de compatibilidade, recomendo fortemente o uso do Docker. O ambiente Docker já vem configurado com todas as dependências necessárias e garante que o sistema funcionará da mesma forma em qualquer máquina.
+
 ## Requisitos
 
 - PHP 7.3 ou superior
