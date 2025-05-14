@@ -44,13 +44,38 @@ class Produto_model extends CI_Model {
     }
     
     public function get_with_estoque() {
-        // Busca os produtos já com o estoque - economia de consultas!
-        $this->db->select('produtos.*, estoque.quantidade');
+        // Primeiro pega todos os produtos
+        $this->db->select('produtos.*');
         $this->db->from('produtos');
-        $this->db->join('estoque', 'estoque.produto_id = produtos.id AND estoque.variacao_id IS NULL', 'left');
-        $this->db->order_by('produtos.nome', 'ASC');
-        $query = $this->db->get();
-        return $query->result();
+        $produtos = $this->db->get()->result();
+        
+        // Agora para cada produto, calcula o estoque total
+        foreach ($produtos as $produto) {
+            // Pega o estoque base (sem variação)
+            $this->db->select('COALESCE(SUM(quantidade), 0) as quantidade');
+            $this->db->from('estoque');
+            $this->db->where('produto_id', $produto->id);
+            $this->db->where('variacao_id IS NULL', null, false);
+            $estoque_base = $this->db->get()->row();
+            $quantidade_base = $estoque_base ? $estoque_base->quantidade : 0;
+            
+            // Pega a soma do estoque das variações
+            $this->db->select('COALESCE(SUM(quantidade), 0) as quantidade');
+            $this->db->from('estoque');
+            $this->db->where('produto_id', $produto->id);
+            $this->db->where('variacao_id IS NOT NULL');
+            $estoque_variacoes = $this->db->get()->row();
+            $quantidade_variacoes = $estoque_variacoes ? $estoque_variacoes->quantidade : 0;
+            
+            // O estoque total é a soma dos dois
+            $produto->quantidade = $quantidade_base + $quantidade_variacoes;
+            
+            // Verifica se tem variações
+            $this->db->where('produto_id', $produto->id);
+            $produto->tem_variacoes = $this->db->count_all_results('variacoes') > 0;
+        }
+        
+        return $produtos;
     }
     
     public function get_variacoes($produto_id) {
@@ -83,8 +108,11 @@ class Produto_model extends CI_Model {
     
     public function get_variacao_by_id($id) {
         // Buscando uma variação específica pelo ID
-        $this->db->where('id', $id);
-        $query = $this->db->get('variacoes');
+        $this->db->select('variacoes.*, estoque.quantidade');
+        $this->db->from('variacoes');
+        $this->db->join('estoque', 'estoque.variacao_id = variacoes.id', 'left');
+        $this->db->where('variacoes.id', $id);
+        $query = $this->db->get();
         return $query->row();
     }
 } 

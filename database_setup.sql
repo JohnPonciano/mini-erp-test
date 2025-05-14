@@ -82,60 +82,64 @@ CREATE TABLE IF NOT EXISTS pedido_itens (
     FOREIGN KEY (variacao_id) REFERENCES variacoes(id) ON DELETE SET NULL
 );
 
--- Insert geek-themed products with strategic prices
-INSERT INTO produtos (nome, preco) VALUES 
-('Camiseta Star Wars - Edição Especial', 89.90),    -- Frete R$15
-('Action Figure Mandalorian', 159.90),              -- Frete R$15
-('Caneca Térmica Harry Potter', 49.90),             -- Frete R$20
-('Funko Pop Demon Slayer', 129.90),                 -- Frete R$15
-('Box Mangá Attack on Titan', 219.90),              -- Frete Grátis
-('Jogo de Tabuleiro RPG Deluxe', 299.90),          -- Frete Grátis
-('Miniatura Goku Dragon Ball', 149.90),             -- Frete R$15
-('Poster Metal Vingadores', 45.90),                 -- Frete R$20
-('Kit Chaveiros Pokémon', 59.90),                   -- Frete R$15
-('Luminária 3D Death Star', 179.90);                -- Frete R$15
+-- Insert products with and without variations
+-- Produtos com variacoes
+INSERT INTO produtos (id, nome, preco) VALUES 
+(1, 'Camiseta Star Wars - Edicao Especial', 89.90),    -- Com variacoes (tamanhos e cores)
+(2, 'Action Figure Mandalorian', 159.90),              -- Com variacoes (poses)
+(3, 'Caneca Termica Harry Potter', 49.90);             -- Com variacoes (casas)
 
--- Insert product variations
-INSERT INTO variacoes (produto_id, nome) VALUES
-(1, 'P Preto'),
-(1, 'M Preto'),
-(1, 'G Preto'),
-(1, 'P Branco'),
-(1, 'M Branco'),
-(1, 'G Branco'),
-(2, 'Beskar Armor'),
-(2, 'Combat Mode'),
-(3, 'Grifinória 500ml'),
-(3, 'Sonserina 500ml'),
-(3, 'Corvinal 500ml'),
-(3, 'Lufa-Lufa 500ml'),
-(4, 'Tanjiro'),
-(4, 'Nezuko'),
-(4, 'Zenitsu'),
-(7, 'Super Sayajin'),
-(7, 'Base Form'),
-(7, 'Ultra Instinct');
+-- Produtos sem variacoes (estoque unico)
+INSERT INTO produtos (id, nome, preco) VALUES 
+(4, 'Box Manga Attack on Titan', 219.90),              -- Sem variacao
+(5, 'Jogo de Tabuleiro RPG Deluxe', 299.90),          -- Sem variacao
+(6, 'Poster Metal Vingadores', 45.90);                 -- Sem variacao
 
--- Insert inventory data
+-- Insert variations for products that have them
+INSERT INTO variacoes (id, produto_id, nome) VALUES
+-- Variacoes da Camiseta Star Wars
+(1, 1, 'P Preto'),
+(2, 1, 'M Preto'),
+(3, 1, 'G Preto'),
+(4, 1, 'P Branco'),
+(5, 1, 'M Branco'),
+(6, 1, 'G Branco'),
+
+-- Variacoes do Action Figure
+(7, 2, 'Pose Batalha'),
+(8, 2, 'Pose Normal'),
+
+-- Variacoes da Caneca
+(9, 3, 'Grifindor'),
+(10, 3, 'Slytherin'),
+(11, 3, 'Ravenclaw'),
+(12, 3, 'Hufflepuff');
+
+-- Insert inventory for products with variations
 INSERT INTO estoque (produto_id, variacao_id, quantidade) VALUES
-(1, 1, 20),  -- Camiseta P Preto
-(1, 2, 25),  -- Camiseta M Preto
-(1, 3, 15),  -- Camiseta G Preto
-(1, 4, 20),  -- Camiseta P Branco
-(1, 5, 25),  -- Camiseta M Branco
-(1, 6, 15),  -- Camiseta G Branco
-(2, 7, 10),  -- Mandalorian Beskar
-(2, 8, 8),   -- Mandalorian Combat
-(3, 9, 15),  -- Caneca Grifinória
-(3, 10, 15), -- Caneca Sonserina
-(3, 11, 15), -- Caneca Corvinal
-(3, 12, 15), -- Caneca Lufa-Lufa
-(4, 13, 12), -- Funko Tanjiro
-(4, 14, 10), -- Funko Nezuko
-(4, 15, 8),  -- Funko Zenitsu
-(7, 16, 10), -- Goku SSJ
-(7, 17, 10), -- Goku Base
-(7, 18, 5);  -- Goku UI
+-- Estoque Camiseta Star Wars
+(1, 1, 20),  -- P Preto
+(1, 2, 25),  -- M Preto
+(1, 3, 15),  -- G Preto
+(1, 4, 20),  -- P Branco
+(1, 5, 25),  -- M Branco
+(1, 6, 15),  -- G Branco
+
+-- Estoque Action Figure
+(2, 7, 10),  -- Pose Batalha
+(2, 8, 8),   -- Pose Normal
+
+-- Estoque Canecas
+(3, 9, 15),   -- Grifindor
+(3, 10, 15),  -- Slytherin
+(3, 11, 15),  -- Ravenclaw
+(3, 12, 15);  -- Hufflepuff
+
+-- Insert inventory for products without variations
+INSERT INTO estoque (produto_id, variacao_id, quantidade) VALUES
+(4, NULL, 50),  -- Box Manga
+(5, NULL, 30),  -- Jogo RPG
+(6, NULL, 100); -- Poster
 
 -- Insert coupon examples
 INSERT INTO cupons (codigo, desconto, tipo, valor_minimo, data_validade, status) VALUES

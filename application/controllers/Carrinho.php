@@ -10,7 +10,6 @@ class Carrinho extends CI_Controller {
         $this->load->model('estoque_model');
         $this->load->model('cupom_model');
         $this->load->model('pedido_model');
-        $this->load->library('email');
     }
     
     public function index() {
@@ -45,162 +44,254 @@ class Carrinho extends CI_Controller {
     }
     
     public function add() {
+        $response = array(
+            'success' => true,
+            'message' => '',
+            'redirect' => ''
+        );
+
         $produto_id = $this->input->post('produto_id');
         $variacao_id = $this->input->post('variacao_id');
-        $quantidade = $this->input->post('quantidade') ? $this->input->post('quantidade') : 1;
-        
-        $produto = $this->produto_model->get_by_id($produto_id);
-        
-        if (!$produto) {
-            // Ué, cadê o produto? Sumiu!
-            $this->session->set_flashdata('error', 'Produto não encontrado');
-            redirect('produtos');
+        $quantidade = (int)$this->input->post('quantidade');
+
+        if ($quantidade < 1) {
+            $quantidade = 1;
         }
+
+        // Log para debug
+        log_message('debug', 'Adicionando ao carrinho - Produto ID: ' . $produto_id . ', Variação ID: ' . $variacao_id . ', Qtd: ' . $quantidade);
+
+        if (!$produto_id) {
+            $response['success'] = false;
+            $response['message'] = 'Produto não encontrado';
+            $response['redirect'] = base_url('produtos');
+            
+            $this->output_response($response);
+            return;
+        }
+
+        $produto = $this->produto_model->get_by_id($produto_id);
+        if (!$produto) {
+            $response['success'] = false;
+            $response['message'] = 'Produto não encontrado';
+            $response['redirect'] = base_url('produtos');
+            
+            $this->output_response($response);
+            return;
+        }
+
+        // Verifica variações
+        $variacoes = $this->produto_model->get_variacoes($produto_id);
         
-        // Vamos ver se tem no estoque ou se já acabou
+        // Log para debug
+        log_message('debug', 'Variações encontradas: ' . json_encode($variacoes));
+
+        if (!empty($variacoes) && !$variacao_id) {
+            $response['success'] = false;
+            $response['message'] = 'Por favor, selecione uma variação do produto';
+            $response['redirect'] = base_url('produtos/view/' . $produto_id);
+            
+            $this->output_response($response);
+            return;
+        }
+
+        // Verifica estoque
         if ($variacao_id) {
             $variacao = $this->produto_model->get_variacao_by_id($variacao_id);
             $estoque = $this->estoque_model->get_by_variacao($variacao_id);
             
+            // Log para debug
+            log_message('debug', 'Dados da variação: ' . json_encode($variacao));
+            log_message('debug', 'Estoque da variação: ' . json_encode($estoque));
+
             if (!$variacao || !$estoque || $estoque->quantidade < $quantidade) {
-                // Sem estoque? Não dá pra vender o que não tem!
-                $this->session->set_flashdata('error', 'Estoque insuficiente');
-                redirect('produtos/view/' . $produto_id);
+                $response['success'] = false;
+                $response['message'] = 'Estoque insuficiente para a variação selecionada';
+                $response['redirect'] = base_url('produtos/view/' . $produto_id);
+                
+                $this->output_response($response);
+                return;
             }
-            
-            // Verificando se o item já existe no carrinho
-            $cart_contents = $this->cart->contents();
-            $item_id = $produto_id . '_' . $variacao_id;
-            $update = false;
-            $rowid = '';
-            
-            foreach ($cart_contents as $item) {
-                if ($item['id'] == $item_id) {
-                    // Item já existe, vamos atualizar a quantidade em vez de duplicar
-                    $update = true;
-                    $rowid = $item['rowid'];
-                    $nova_quantidade = $item['qty'] + $quantidade;
-                    
-                    // Verificando se tem estoque suficiente para a quantidade atualizada
-                    if ($estoque->quantidade < $nova_quantidade) {
-                        $this->session->set_flashdata('error', 'Estoque insuficiente para ' . $item['name']);
-                        redirect('produtos/view/' . $produto_id);
-                    }
-                    
-                    break;
-                }
-            }
-            
-            if ($update) {
-                // Atualiza item existente
-                $this->cart->update(array(
-                    'rowid' => $rowid,
-                    'qty' => $nova_quantidade
-                ));
-            } else {
-                // Adiciona novo item
-                $item = array(
-                    'id'      => $item_id,
-                    'qty'     => $quantidade,
-                    'price'   => $produto->preco,
-                    'name'    => $produto->nome . ' - ' . $variacao->nome,
-                    'options' => array(
-                        'produto_id' => $produto_id,
-                        'variacao_id' => $variacao_id,
-                        'variacao_nome' => $variacao->nome
-                    )
-                );
-                $this->cart->insert($item);
-            }
+
+            // Para produtos com variação, o ID do item no carrinho será a combinação de produto_id e variacao_id
+            $item_id = 'p' . $produto_id . 'v' . $variacao_id;
+            $item_name = $produto->nome . ' - ' . $variacao->nome;
         } else {
             $estoque = $this->estoque_model->get_by_produto($produto_id);
             
             if (!$estoque || $estoque->quantidade < $quantidade) {
-                // Ops, estoque zerado!
-                $this->session->set_flashdata('error', 'Estoque insuficiente');
-                redirect('produtos/view/' . $produto_id);
+                $response['success'] = false;
+                $response['message'] = 'Estoque insuficiente';
+                $response['redirect'] = base_url('produtos/view/' . $produto_id);
+                
+                $this->output_response($response);
+                return;
             }
-            
-            // Verificando se o item já existe no carrinho
-            $cart_contents = $this->cart->contents();
-            $update = false;
-            $rowid = '';
-            
-            foreach ($cart_contents as $item) {
-                if ($item['id'] == $produto_id) {
-                    // Item já existe, vamos atualizar a quantidade em vez de duplicar
-                    $update = true;
-                    $rowid = $item['rowid'];
-                    $nova_quantidade = $item['qty'] + $quantidade;
+
+            $item_id = 'p' . $produto_id;
+            $item_name = $produto->nome;
+        }
+
+        // Log para debug
+        log_message('debug', 'Item ID gerado: ' . $item_id);
+
+        // Verifica se já existe no carrinho
+        $cart_contents = $this->cart->contents();
+        foreach ($cart_contents as $item) {
+            if ($item['id'] == $item_id) {
+                $nova_quantidade = $item['qty'] + $quantidade;
+                
+                if (($variacao_id && $estoque->quantidade < $nova_quantidade) || 
+                    (!$variacao_id && $estoque->quantidade < $nova_quantidade)) {
+                    $response['success'] = false;
+                    $response['message'] = 'Estoque insuficiente para ' . $item_name;
+                    $response['redirect'] = base_url('produtos/view/' . $produto_id);
                     
-                    // Verificando se tem estoque suficiente para a quantidade atualizada
-                    if ($estoque->quantidade < $nova_quantidade) {
-                        $this->session->set_flashdata('error', 'Estoque insuficiente para ' . $item['name']);
-                        redirect('produtos/view/' . $produto_id);
-                    }
-                    
-                    break;
+                    $this->output_response($response);
+                    return;
                 }
-            }
-            
-            if ($update) {
-                // Atualiza item existente
-                $this->cart->update(array(
-                    'rowid' => $rowid,
+
+                // Log para debug
+                log_message('debug', 'Atualizando item existente - RowID: ' . $item['rowid'] . ', Nova Qtd: ' . $nova_quantidade);
+
+                $update_result = $this->cart->update(array(
+                    'rowid' => $item['rowid'],
                     'qty' => $nova_quantidade
                 ));
-            } else {
-                // Adiciona novo item
-                $item = array(
-                    'id'      => $produto_id,
-                    'qty'     => $quantidade,
-                    'price'   => $produto->preco,
-                    'name'    => $produto->nome,
-                    'options' => array(
-                        'produto_id' => $produto_id,
-                        'variacao_id' => null
-                    )
-                );
-                $this->cart->insert($item);
+
+                // Log para debug
+                log_message('debug', 'Resultado da atualização: ' . json_encode($update_result));
+
+                $response['message'] = 'Quantidade atualizada no carrinho: ' . $item_name;
+                $response['redirect'] = base_url('carrinho');
+                
+                $this->output_response($response);
+                return;
             }
         }
+
+        // Adiciona novo item
+        $item = array(
+            'id' => $item_id,
+            'qty' => $quantidade,
+            'price' => $produto->preco,
+            'name' => $item_name,
+            'options' => array(
+                'produto_id' => $produto_id,
+                'variacao_id' => $variacao_id,
+                'variacao_nome' => isset($variacao) ? $variacao->nome : null
+            )
+        );
+
+        // Log para debug
+        log_message('debug', 'Adicionando novo item: ' . json_encode($item));
+
+        $insert_result = $this->cart->insert($item);
+
+        // Log para debug
+        log_message('debug', 'Resultado da inserção: ' . json_encode($insert_result));
+
+        if ($insert_result === false) {
+            $response['success'] = false;
+            $response['message'] = 'Erro ao adicionar item ao carrinho';
+            $response['redirect'] = base_url('produtos/view/' . $produto_id);
+            
+            $this->output_response($response);
+            return;
+        }
+
+        $response['success'] = true;
+        $response['message'] = 'Adicionado ao carrinho: ' . $item_name;
+        $response['redirect'] = base_url('carrinho');
         
-        // Bota no carrinho e vamos às compras!
-        $this->session->set_flashdata('success', 'Produto adicionado ao carrinho');
-        redirect('carrinho');
+        $this->output_response($response);
     }
     
     public function update() {
-        $cart_info = $_POST['cart'];
+        // Prevent direct access
+        if (!$this->input->is_ajax_request() && !$this->input->post()) {
+            redirect('carrinho');
+        }
+
+        $response = array(
+            'success' => true,
+            'message' => 'Carrinho atualizado com sucesso',
+            'errors' => array()
+        );
+
+        $cart_info = $this->input->post('cart');
         
-        foreach ($cart_info as $id => $cart) {
-            $rowid = $cart['rowid'];
-            $qty = $cart['qty'];
+        if (!$cart_info) {
+            $response['success'] = false;
+            $response['message'] = 'Dados inválidos';
             
-            // Antes de atualizar, vamos ver se tem produto suficiente
-            $item = $this->cart->get_item($rowid);
-            if ($item) {
-                $produto_id = $item['options']['produto_id'];
-                $variacao_id = $item['options']['variacao_id'];
-                
-                $quantidade_suficiente = $this->verificar_estoque($produto_id, $variacao_id, $qty);
-                
-                if (!$quantidade_suficiente) {
-                    // Cliente querendo mais do que temos... não vai rolar!
-                    $this->session->set_flashdata('error', 'Estoque insuficiente para ' . $item['name']);
-                    redirect('carrinho');
-                }
+            if ($this->input->is_ajax_request()) {
+                echo json_encode($response);
+                return;
             }
             
-            $data = array(
+            $this->session->set_flashdata('error', $response['message']);
+            redirect('carrinho');
+        }
+
+        foreach ($cart_info as $rowid => $info) {
+            if (!isset($info['qty'])) {
+                continue;
+            }
+
+            $qty = (int)$info['qty'];
+            if ($qty < 1) {
+                $qty = 1;
+            }
+
+            $cart_item = $this->cart->get_item($rowid);
+            if (!$cart_item) {
+                continue;
+            }
+
+            $produto_id = isset($cart_item['options']['produto_id']) ? $cart_item['options']['produto_id'] : null;
+            $variacao_id = isset($cart_item['options']['variacao_id']) ? $cart_item['options']['variacao_id'] : null;
+
+            if (!$produto_id) {
+                continue;
+            }
+
+            // Verifica estoque
+            if (!$this->verificar_estoque($produto_id, $variacao_id, $qty)) {
+                $response['success'] = false;
+                $response['errors'][] = 'Estoque insuficiente para ' . $cart_item['name'];
+                continue;
+            }
+
+            $update_data = array(
                 'rowid' => $rowid,
                 'qty' => $qty
             );
-            
-            $this->cart->update($data);
+
+            if (!$this->cart->update($update_data)) {
+                $response['success'] = false;
+                $response['errors'][] = 'Erro ao atualizar ' . $cart_item['name'];
+            }
         }
-        
-        $this->session->set_flashdata('success', 'Carrinho atualizado com sucesso');
+
+        if (!$response['success']) {
+            $response['message'] = 'Ocorreram alguns erros ao atualizar o carrinho';
+        }
+
+        if ($this->input->is_ajax_request()) {
+            echo json_encode($response);
+            return;
+        }
+
+        if ($response['success']) {
+            $this->session->set_flashdata('success', $response['message']);
+        } else {
+            $this->session->set_flashdata('error', $response['message']);
+            if (!empty($response['errors'])) {
+                $this->session->set_flashdata('errors', $response['errors']);
+            }
+        }
+
         redirect('carrinho');
     }
     
@@ -339,9 +430,6 @@ class Carrinho extends CI_Controller {
                 );
             }
             
-            // Envia e-mail de confirmação para o cliente ficar tranquilo
-            $this->enviar_email_confirmacao($pedido_id);
-            
             // Limpa o carrinho - já foi tudo pro pedido!
             $this->cart->destroy();
             $this->session->unset_userdata('cupom_codigo');
@@ -380,50 +468,6 @@ class Carrinho extends CI_Controller {
         } else {
             $estoque = $this->estoque_model->get_by_produto($produto_id);
             return ($estoque && $estoque->quantidade >= $quantidade);
-        }
-    }
-    
-    private function enviar_email_confirmacao($pedido_id) {
-        // Busca os dados do pedido para mostrar no email
-        $pedido = $this->pedido_model->get_by_id($pedido_id);
-        $itens = $this->pedido_model->get_items($pedido_id);
-        
-        // Prepara o conteúdo do e-mail
-        $this->email->from('vendas@microerp.com.br', 'Micro ERP');
-        $this->email->to($pedido->cliente_email);
-        $this->email->subject('Confirmação de Pedido #' . $pedido_id);
-        
-        $mensagem = "Olá " . $pedido->cliente_nome . ",\n\n";
-        $mensagem .= "Seu pedido #" . $pedido_id . " foi recebido com sucesso!\n\n";
-        $mensagem .= "Resumo do pedido:\n";
-        
-        foreach ($itens as $item) {
-            $mensagem .= "- " . $item->nome . " x " . $item->quantidade . ": R$ " . number_format($item->subtotal, 2, ',', '.') . "\n";
-        }
-        
-        $mensagem .= "\nSubtotal: R$ " . number_format($pedido->subtotal, 2, ',', '.');
-        $mensagem .= "\nFrete: R$ " . number_format($pedido->frete, 2, ',', '.');
-        
-        if ($pedido->desconto > 0) {
-            $mensagem .= "\nDesconto: -R$ " . number_format($pedido->desconto, 2, ',', '.');
-        }
-        
-        $mensagem .= "\nTotal: R$ " . number_format($pedido->total, 2, ',', '.');
-        
-        $mensagem .= "\n\nEndereço de entrega:";
-        $mensagem .= "\n" . $pedido->endereco;
-        $mensagem .= "\n" . $pedido->cidade . " - " . $pedido->estado;
-        $mensagem .= "\nCEP: " . $pedido->cep;
-        
-        $mensagem .= "\n\nObrigado por comprar conosco!";
-        
-        $this->email->message($mensagem);
-        
-        // Tenta enviar o email, mas não para tudo se der erro
-        try {
-            $this->email->send();
-        } catch (Exception $e) {
-            log_message('error', 'Erro ao enviar email: ' . $e->getMessage());
         }
     }
     
@@ -474,5 +518,24 @@ class Carrinho extends CI_Controller {
             'cidade' => $endereco->localidade,
             'estado' => $endereco->uf
         ]);
+    }
+
+    private function output_response($response) {
+        if ($this->input->is_ajax_request()) {
+            echo json_encode($response);
+            return;
+        }
+
+        if ($response['success']) {
+            $this->session->set_flashdata('success', $response['message']);
+        } else {
+            $this->session->set_flashdata('error', $response['message']);
+        }
+
+        if (!empty($response['redirect'])) {
+            redirect($response['redirect']);
+        }
+        
+        redirect('carrinho');
     }
 } 

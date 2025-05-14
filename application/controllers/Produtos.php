@@ -23,54 +23,62 @@ class Produtos extends CI_Controller {
     public function create() {
         $data['title'] = 'Cadastrar Novo Produto';
         
-        // Regras de validação - não dá pra cadastrar produto sem nome e preço, né?
+        // Regras de validação básicas
         $this->form_validation->set_rules('nome', 'Nome', 'required');
         $this->form_validation->set_rules('preco', 'Preço', 'required|numeric');
-        $this->form_validation->set_rules('quantidade', 'Quantidade', 'required|numeric');
-        // Nova validação: pelo menos uma variação base é obrigatória
-        $this->form_validation->set_rules('variacoes_nomes[0]', 'Variação Base', 'required');
+        
+        // Verifica se tem estoque base
+        $tem_estoque_base = (bool)$this->input->post('quantidade');
+        
+        // Se não tem estoque base, então pelo menos uma variação é obrigatória
+        if (!$tem_estoque_base) {
+            $this->form_validation->set_rules('variacoes_nomes[0]', 'Variação Base', 'required');
+        }
         
         if ($this->form_validation->run() === FALSE) {
-            // Formulário com erro ou primeira vez que abre
             $this->load->view('templates/header', $data);
             $this->load->view('produtos/create', $data);
             $this->load->view('templates/footer');
         } else {
-            // Primeiro cadastra o produto básico
+            // Cadastra o produto básico
             $produto_id = $this->produto_model->insert([
                 'nome' => $this->input->post('nome'),
                 'preco' => $this->input->post('preco')
             ]);
             
-            // Depois registra o estoque inicial do produto
-            $this->estoque_model->update_quantidade_produto(
-                $produto_id, 
-                $this->input->post('quantidade')
-            );
+            // Se tem quantidade base, registra o estoque
+            $quantidade_base = $this->input->post('quantidade');
+            if ($quantidade_base > 0) {
+                $this->estoque_model->update_quantidade_produto(
+                    $produto_id, 
+                    $quantidade_base
+                );
+            }
             
-            // Agora cadastramos as variações - É obrigatório ter pelo menos uma!
+            // Cadastra as variações se houver
             $variacoes_nomes = $this->input->post('variacoes_nomes');
             $variacoes_qtds = $this->input->post('variacoes_qtds');
             
-            foreach ($variacoes_nomes as $key => $nome) {
-                if (!empty($nome)) {
-                    // Cadastra a variação (cor, tamanho, etc)
-                    $variacao_id = $this->produto_model->add_variacao([
-                        'produto_id' => $produto_id,
-                        'nome' => $nome
-                    ]);
-                    
-                    // E registra o estoque dessa variação
-                    if (isset($variacoes_qtds[$key])) {
-                        $this->estoque_model->update_quantidade_variacao(
-                            $variacao_id,
-                            $variacoes_qtds[$key]
-                        );
+            if ($variacoes_nomes) {
+                foreach ($variacoes_nomes as $key => $nome) {
+                    if (!empty($nome)) {
+                        // Cadastra a variação
+                        $variacao_id = $this->produto_model->add_variacao([
+                            'produto_id' => $produto_id,
+                            'nome' => $nome
+                        ]);
+                        
+                        // Registra o estoque da variação se houver
+                        if (isset($variacoes_qtds[$key]) && $variacoes_qtds[$key] > 0) {
+                            $this->estoque_model->update_quantidade_variacao(
+                                $variacao_id,
+                                $variacoes_qtds[$key]
+                            );
+                        }
                     }
                 }
             }
             
-            // Tudo pronto, produto cadastrado!
             $this->session->set_flashdata('success', 'Produto cadastrado com sucesso!');
             redirect('produtos');
         }
@@ -81,7 +89,6 @@ class Produtos extends CI_Controller {
         $data['produto'] = $this->produto_model->get_by_id($id);
         
         if (empty($data['produto'])) {
-            // Produto não existe? Página 404 nele!
             show_404();
         }
         
@@ -90,30 +97,31 @@ class Produtos extends CI_Controller {
         $data['variacoes'] = $this->produto_model->get_variacoes($id);
         $data['title'] = 'Editar Produto: ' . $data['produto']->nome;
         
-        // Mesmas regras de validação do cadastro
+        // Regras de validação básicas
         $this->form_validation->set_rules('nome', 'Nome', 'required');
         $this->form_validation->set_rules('preco', 'Preço', 'required|numeric');
-        $this->form_validation->set_rules('quantidade', 'Quantidade', 'required|numeric');
         
-        // Verificando se já existem variações ou se há novas
+        // Verifica se tem estoque base
+        $tem_estoque_base = (bool)$this->input->post('quantidade');
+        
+        // Verifica se já existem variações
         $tem_variacoes = false;
-        
         if (!empty($data['variacoes'])) {
             $tem_variacoes = true;
-        } else if ($this->input->post('novas_variacoes_nomes')) {
+        }
+        
+        // Se não tem estoque base e não tem variações existentes, 
+        // verifica se está tentando adicionar novas variações
+        if (!$tem_estoque_base && !$tem_variacoes) {
             $novas_variacoes = $this->input->post('novas_variacoes_nomes');
-            if (!empty($novas_variacoes[0])) {
-                $tem_variacoes = true;
+            if (empty($novas_variacoes) || empty($novas_variacoes[0])) {
+                $this->form_validation->set_rules('quantidade', 'Quantidade Base', 'required|numeric',
+                    array('required' => 'É necessário ter quantidade base ou pelo menos uma variação.')
+                );
             }
         }
         
-        // Se não há variações existentes, a primeira nova variação é obrigatória
-        if (!$tem_variacoes) {
-            $this->form_validation->set_rules('novas_variacoes_nomes[0]', 'Variação Base', 'required');
-        }
-        
         if ($this->form_validation->run() === FALSE) {
-            // Exibe o formulário de edição
             $this->load->view('templates/header', $data);
             $this->load->view('produtos/edit', $data);
             $this->load->view('templates/footer');
@@ -124,11 +132,14 @@ class Produtos extends CI_Controller {
                 'preco' => $this->input->post('preco')
             ]);
             
-            // Atualiza o estoque
-            $this->estoque_model->update_quantidade_produto(
-                $id, 
-                $this->input->post('quantidade')
-            );
+            // Atualiza o estoque base se houver quantidade
+            $quantidade_base = $this->input->post('quantidade');
+            if ($quantidade_base > 0) {
+                $this->estoque_model->update_quantidade_produto(
+                    $id, 
+                    $quantidade_base
+                );
+            }
             
             // Atualizando as variações existentes
             if ($this->input->post('variacao_ids')) {
@@ -137,14 +148,12 @@ class Produtos extends CI_Controller {
                 $variacao_qtds = $this->input->post('variacao_qtds');
                 
                 foreach ($variacao_ids as $key => $variacao_id) {
-                    // Atualiza o nome da variação
                     if (isset($variacao_nomes[$key])) {
                         $this->produto_model->update_variacao($variacao_id, [
                             'nome' => $variacao_nomes[$key]
                         ]);
                     }
                     
-                    // E atualiza o estoque dela
                     if (isset($variacao_qtds[$key])) {
                         $this->estoque_model->update_quantidade_variacao(
                             $variacao_id,
@@ -161,14 +170,12 @@ class Produtos extends CI_Controller {
                 
                 foreach ($novas_nomes as $key => $nome) {
                     if (!empty($nome)) {
-                        // Adiciona a nova variação
                         $variacao_id = $this->produto_model->add_variacao([
                             'produto_id' => $id,
                             'nome' => $nome
                         ]);
                         
-                        // E registra seu estoque inicial
-                        if (isset($novas_qtds[$key])) {
+                        if (isset($novas_qtds[$key]) && $novas_qtds[$key] > 0) {
                             $this->estoque_model->update_quantidade_variacao(
                                 $variacao_id,
                                 $novas_qtds[$key]
@@ -178,7 +185,6 @@ class Produtos extends CI_Controller {
                 }
             }
             
-            // Produto atualizado com sucesso!
             $this->session->set_flashdata('success', 'Produto atualizado com sucesso!');
             redirect('produtos');
         }
@@ -213,7 +219,6 @@ class Produtos extends CI_Controller {
     }
     
     public function add_to_cart() {
-        // Pegando os dados do formulário de "adicionar ao carrinho"
         $produto_id = $this->input->post('produto_id');
         $variacao_id = $this->input->post('variacao_id');
         $quantidade = $this->input->post('quantidade') ? $this->input->post('quantidade') : 1;
@@ -221,20 +226,27 @@ class Produtos extends CI_Controller {
         $produto = $this->produto_model->get_by_id($produto_id);
         
         if (!$produto) {
-            // Produto não encontrado? Algo deu errado...
             $this->session->set_flashdata('error', 'Produto não encontrado');
             redirect('produtos');
         }
         
-        // Verificando o estoque antes de adicionar
+        // Verifica se o produto tem variações
+        $variacoes = $this->produto_model->get_variacoes($produto_id);
+        
+        // Se o produto tem variações, é obrigatório selecionar uma
+        if (!empty($variacoes) && !$variacao_id) {
+            $this->session->set_flashdata('error', 'Selecione uma variação do produto');
+            redirect('produtos/view/' . $produto_id);
+        }
+        
+        // Verificando o estoque
         if ($variacao_id) {
-            // É uma variação específica
+            // Produto com variação
             $variacao = $this->produto_model->get_variacao_by_id($variacao_id);
             $estoque = $this->estoque_model->get_by_variacao($variacao_id);
             
             if (!$variacao || !$estoque || $estoque->quantidade < $quantidade) {
-                // Sem estoque suficiente!
-                $this->session->set_flashdata('error', 'Estoque insuficiente');
+                $this->session->set_flashdata('error', 'Estoque insuficiente para a variação selecionada');
                 redirect('produtos/view/' . $produto_id);
             }
             
@@ -251,11 +263,10 @@ class Produtos extends CI_Controller {
                 )
             );
         } else {
-            // É o produto sem variação
+            // Produto sem variação
             $estoque = $this->estoque_model->get_by_produto($produto_id);
             
             if (!$estoque || $estoque->quantidade < $quantidade) {
-                // Sem estoque suficiente!
                 $this->session->set_flashdata('error', 'Estoque insuficiente');
                 redirect('produtos/view/' . $produto_id);
             }
@@ -273,7 +284,7 @@ class Produtos extends CI_Controller {
             );
         }
         
-        // Coloca no carrinho e redireciona
+        // Adiciona ao carrinho
         $this->cart->insert($item);
         $this->session->set_flashdata('success', 'Produto adicionado ao carrinho');
         redirect('carrinho');
