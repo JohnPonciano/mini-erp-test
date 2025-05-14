@@ -14,7 +14,7 @@ Um sistema simples para controle de Pedidos, Produtos, Cupons e Estoque feito co
 
 1. Clone ou baixe este repositório
    ```
-   git clone https://github.com/johnponciano/micro-erp.git
+   git clone https://github.com/JohnPonciano/mini-erp-test.git
    cd micro-erp
    ```
 2. Configure seu servidor web (Apache/Nginx) para apontar para a pasta raiz do projeto
@@ -59,7 +59,7 @@ Um sistema simples para controle de Pedidos, Produtos, Cupons e Estoque feito co
 
 1. Clone ou baixe este repositório
    ```
-   git clone https://github.com/seu-usuario/micro-erp.git
+   git clone https://github.com/JohnPonciano/mini-erp-test.git
    cd micro-erp
    ```
 2. Certifique-se de que você tem Docker e Docker Compose instalados no seu sistema
